@@ -1,0 +1,1519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>仓库收发货错峰调度工具</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, "Microsoft YaHei", sans-serif;
+  background: #F5F4EE;
+  color: #2C2C2A;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.app { display: grid; grid-template-columns: 420px 1fr; gap: 16px; padding: 16px; min-height: 100vh; }
+.panel { background: #FFFFFF; border: 0.5px solid #D3D1C7; border-radius: 12px; padding: 18px 20px; }
+.panel h2 { font-size: 17px; font-weight: 500; margin: 0 0 14px; }
+.panel h3 { font-size: 14px; font-weight: 500; margin: 18px 0 8px; color: #444441; }
+.panel h3:first-of-type { margin-top: 0; }
+.row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.row label { font-size: 13px; color: #5F5E5A; min-width: 110px; }
+input[type=text], input[type=number], select, textarea {
+  border: 0.5px solid #D3D1C7; border-radius: 6px; padding: 6px 8px;
+  font-family: inherit; font-size: 13px; background: #FFFFFF; color: #2C2C2A;
+  flex: 1; min-width: 0;
+}
+textarea { resize: vertical; min-height: 60px; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: #378ADD; box-shadow: 0 0 0 2px rgba(55,138,221,0.15); }
+button {
+  background: transparent; border: 0.5px solid #B4B2A9; border-radius: 6px;
+  padding: 6px 12px; font-family: inherit; font-size: 13px; cursor: pointer;
+  color: #2C2C2A; transition: background 0.1s;
+}
+button:hover { background: #F1EFE8; }
+button:active { transform: scale(0.98); }
+.btn-primary { background: #378ADD; color: white; border-color: #378ADD; }
+.btn-primary:hover { background: #185FA5; }
+.btn-danger { color: #A32D2D; border-color: #F09595; }
+.btn-danger:hover { background: #FCEBEB; }
+.list-item {
+  border: 0.5px solid #D3D1C7; border-radius: 8px; padding: 10px 12px;
+  margin: 6px 0; background: #FAFAF7; font-size: 13px;
+}
+.list-item .meta { color: #5F5E5A; font-size: 12px; margin-top: 3px; }
+.list-actions { display: flex; gap: 6px; margin-top: 8px; }
+.tabs { display: flex; gap: 2px; border-bottom: 0.5px solid #D3D1C7; margin: 0 0 16px; }
+.tab { padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent; font-size: 13px; color: #5F5E5A; }
+.tab.active { color: #2C2C2A; border-bottom-color: #378ADD; font-weight: 500; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th, td { border: 0.5px solid #E8E6DE; padding: 7px 8px; text-align: left; vertical-align: top; }
+th { background: #F1EFE8; font-weight: 500; color: #2C2C2A; }
+tr.peak td { background: #FCEBEB; }
+tr.warn td { background: #FAEEDA; }
+tr.calm td { background: #EAF3DE; }
+.badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; margin-right: 4px; }
+.b-red { background: #FCEBEB; color: #791F1F; }
+.b-amber { background: #FAEEDA; color: #633806; }
+.b-green { background: #EAF3DE; color: #27500A; }
+.b-blue { background: #E6F1FB; color: #0C447C; }
+.b-gray { background: #F1EFE8; color: #444441; }
+.entry-grid { display: grid; grid-template-columns: 2fr 1.2fr 70px 1fr 90px 60px; gap: 6px; align-items: center; margin: 4px 0; }
+.entry-grid input, .entry-grid select { padding: 5px 7px; font-size: 12.5px; }
+.entry-head { font-size: 11.5px; color: #5F5E5A; font-weight: 500; }
+.empty-hint { color: #888780; font-size: 12.5px; padding: 12px; text-align: center; background: #F8F7F1; border-radius: 6px; }
+.action-bar { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 0 0 16px; }
+.metric { background: #F1EFE8; border-radius: 8px; padding: 12px 14px; }
+.metric .lab { font-size: 12px; color: #5F5E5A; margin: 0 0 4px; }
+.metric .num { font-size: 22px; font-weight: 500; }
+.section-title { font-size: 13px; color: #5F5E5A; margin: 16px 0 8px; }
+details summary { cursor: pointer; font-size: 13px; color: #185FA5; padding: 4px 0; user-select: none; }
+details[open] summary { margin-bottom: 8px; }
+.empty-result { padding: 60px 20px; text-align: center; color: #888780; }
+.empty-result h3 { color: #5F5E5A; }
+@media (max-width: 1100px) {
+  .app { grid-template-columns: 1fr; }
+  .entry-grid { grid-template-columns: 1.5fr 1fr 60px 1fr; }
+  .entry-grid .col-extra { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+<div class="panel" id="input-panel">
+<h2>1 输入参数</h2>
+
+<h3>仓库容量</h3>
+<div class="row"><label>电动叉车数</label><input type="number" id="elec-fork" value="1" min="0" step="1"></div>
+<div class="row"><label>手动叉车数</label><input type="number" id="manual-fork" value="1" min="0" step="1"></div>
+<div class="row"><label>装车时长</label><input type="number" id="load-min" value="30" min="5" step="5"><span style="color:#5F5E5A;font-size:12px">分钟/车</span></div>
+<div class="row"><label>卸货时长</label><input type="number" id="unload-min" value="45" min="5" step="5"><span style="color:#5F5E5A;font-size:12px">分钟/车</span></div>
+
+<h3>客户发货 <button onclick="addDelivery()" style="float:right;font-size:12px;padding:3px 8px">+ 添加</button></h3>
+<div class="entry-grid entry-head">
+<div>客户</div><div>厂区</div><div>车数</div><div>时间</div><div>紧急</div><div></div>
+</div>
+<div id="delivery-list"></div>
+
+<h3>纸板来料 <button onclick="addArrival()" style="float:right;font-size:12px;padding:3px 8px">+ 添加</button></h3>
+<div class="entry-grid entry-head">
+<div>供应商/客户料</div><div>厂区</div><div>车数</div><div>到货时段</div><div>当日发货</div><div></div>
+</div>
+<div id="arrival-list"></div>
+
+<h3>名单管理</h3>
+<details>
+<summary>展开管理客户/供应商名单</summary>
+<div style="margin-top:8px">
+<div class="row" style="margin-bottom:6px"><label style="min-width:60px">客户</label>
+<input type="text" id="new-customer" placeholder="新增客户名">
+<button onclick="addCustomer()">添加</button></div>
+<div id="customer-tags" style="margin-bottom:12px"></div>
+<div class="row" style="margin-bottom:6px"><label style="min-width:60px">供应商</label>
+<input type="text" id="new-supplier" placeholder="新增供应商名">
+<button onclick="addSupplier()">添加</button></div>
+<div id="supplier-tags"></div>
+</div>
+</details>
+
+<div class="action-bar">
+<button class="btn-primary" onclick="generateSchedule()">生成调度方案</button>
+<button onclick="showImportDialog('delivery')" style="background:#1D9E75;color:white;border-color:#1D9E75">📋 导入发货表</button>
+<button onclick="showImportDialog('arrival')" style="background:#1D9E75;color:white;border-color:#1D9E75">📋 导入来料表</button>
+<button onclick="loadDemo()">加载示例数据</button>
+<button onclick="clearAll()" class="btn-danger">清空</button>
+</div>
+</div>
+
+<div class="panel" id="output-panel">
+<h2>2 调度方案输出</h2>
+<div id="result-empty" class="empty-result">
+<h3>等待输入</h3>
+<p>左侧填写客户发货车次和纸板来料计划<br>点击"生成调度方案"或"加载示例数据"查看效果</p>
+</div>
+
+<div id="result-content" style="display:none">
+<div class="metric-grid">
+<div class="metric"><p class="lab">发货总车次</p><p class="num" id="m-out">0</p></div>
+<div class="metric"><p class="lab">收货总车次</p><p class="num" id="m-in">0</p></div>
+<div class="metric"><p class="lab">高峰时段数</p><p class="num" id="m-peak" style="color:#A32D2D">0</p></div>
+<div class="metric"><p class="lab">每小时容量</p><p class="num" id="m-cap">0</p><p class="lab" id="m-cap-sub" style="margin-top:2px">分钟</p></div>
+</div>
+
+<div style="display:flex;align-items:flex-end;gap:12px;border-bottom:0.5px solid #D3D1C7;margin:0 0 16px">
+<div class="tabs" style="border-bottom:none;margin:0;flex:1">
+<div class="tab active" data-tab="overview">① 调度总览</div>
+<div class="tab" data-tab="match">② 收料↔发货匹配</div>
+<div class="tab" data-tab="supplier">③ 供应商时段建议</div>
+<div class="tab" data-tab="risk">④ 风险与对策</div>
+<div class="tab" data-tab="review">⑤ 复盘记录</div>
+<div class="tab" data-tab="score">⑥ 供应商评分</div>
+</div>
+<div style="padding:0 0 8px">
+<label style="font-size:12px;color:#5F5E5A;margin-right:6px">导出语言 / Lang</label>
+<select id="export-lang" style="padding:5px 8px;border:0.5px solid #D3D1C7;border-radius:6px;font-size:13px">
+<option value="zh">中文</option>
+<option value="th">ภาษาไทย (Thai)</option>
+<option value="my">မြန်မာ (Burmese)</option>
+</select>
+</div>
+</div>
+
+<div id="tab-overview" class="tab-panel active">
+<div class="action-bar" style="margin-bottom:10px;margin-top:0">
+<button onclick="exportSheet('overview')">导出此表 Excel</button>
+<button onclick="exportAll()">导出全部4表</button>
+</div>
+<div id="table-overview"></div>
+</div>
+
+<div id="tab-match" class="tab-panel">
+<div class="action-bar" style="margin-bottom:10px;margin-top:0">
+<button onclick="exportSheet('match')">导出此表 Excel</button>
+</div>
+<div id="table-match"></div>
+</div>
+
+<div id="tab-supplier" class="tab-panel">
+<div class="action-bar" style="margin-bottom:10px;margin-top:0">
+<button onclick="exportSheet('supplier')">导出此表 Excel</button>
+</div>
+<div id="table-supplier"></div>
+</div>
+
+<div id="tab-risk" class="tab-panel">
+<div class="action-bar" style="margin-bottom:10px;margin-top:0">
+<button onclick="exportSheet('risk')">导出此表 Excel</button>
+</div>
+<div id="table-risk"></div>
+</div>
+
+<div id="tab-review" class="tab-panel">
+<div style="background:#F8F7F1;padding:12px 14px;border-radius:8px;margin-bottom:14px;font-size:13px;color:#444441">
+<strong>复盘说明：</strong>当天结束时填写实际情况，系统会自动对比计划，并给"问题供应商"打分。
+数据存在浏览器本地（保留最近90天），换电脑会丢，重要数据请定期"导出全部记录"。
+</div>
+
+<h3 style="margin:0 0 10px;font-size:15px">今日复盘 — <span id="review-date" style="color:#5F5E5A;font-weight:400"></span></h3>
+
+<div style="background:#FFFFFF;border:0.5px solid #D3D1C7;border-radius:8px;padding:14px;margin-bottom:16px">
+
+<div class="row"><label style="min-width:110px">复盘日期</label>
+<input type="date" id="review-date-input" style="flex:0 0 160px">
+<button onclick="saveReview()" class="btn-primary" style="margin-left:auto">保存今日复盘</button>
+</div>
+
+<h4 style="font-size:13px;color:#444441;margin:14px 0 8px">A. 供应商实到情况（基于今天的来料计划自动列出）</h4>
+<div id="supplier-actuals"></div>
+
+<h4 style="font-size:13px;color:#444441;margin:14px 0 8px">B. 计划外干扰</h4>
+<div class="row"><label>临时插队车数</label><input type="number" id="rev-extra" value="0" min="0" style="flex:0 0 80px"><span style="color:#5F5E5A;font-size:12px">车</span></div>
+<div class="row"><label>客户违约车数</label><input type="number" id="rev-cust-late" value="0" min="0" style="flex:0 0 80px"><span style="color:#5F5E5A;font-size:12px">车（晚到/未到）</span></div>
+
+<h4 style="font-size:13px;color:#444441;margin:14px 0 8px">C. 红灯时段实际表现</h4>
+<div class="row"><label>计划红灯时段</label><span id="rev-planned-peaks" style="color:#5F5E5A">—</span></div>
+<div class="row"><label>实际拥堵时段</label><input type="text" id="rev-actual-peaks" placeholder="如 08:00, 17:00（用逗号分隔）" style="flex:1"></div>
+
+<h4 style="font-size:13px;color:#444441;margin:14px 0 8px">D. 备注与改进建议</h4>
+<textarea id="rev-notes" placeholder="今日异常情况、临时调整、下次注意事项..." style="width:100%;min-height:60px"></textarea>
+</div>
+
+<h3 style="margin:18px 0 10px;font-size:15px">历史记录</h3>
+<div class="action-bar" style="margin-bottom:10px;margin-top:0">
+<button onclick="exportReviews()">导出全部记录 Excel</button>
+<button onclick="clearAllReviews()" class="btn-danger">清空所有记录</button>
+</div>
+<div id="review-history"></div>
+</div>
+
+<div id="tab-score" class="tab-panel">
+<div style="background:#F8F7F1;padding:12px 14px;border-radius:8px;margin-bottom:14px;font-size:13px;color:#444441">
+<strong>评分规则：</strong>每次复盘后自动累计。准时到货 +1 分；迟到 -1 分；未到/早到造成拥堵 -2 分。
+连续30天评分 ≥+5 = 优秀；-5 至 +5 = 普通；≤-5 = 重点关注（建议下次排不便时段倒逼改进）。
+</div>
+
+<div class="action-bar" style="margin-bottom:14px;margin-top:0">
+<button onclick="exportScores()">导出评分 Excel</button>
+</div>
+
+<div id="score-cards" class="metric-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:16px"></div>
+
+<h4 style="font-size:14px;font-weight:500;margin:0 0 10px">详细评分记录</h4>
+<div id="score-table"></div>
+</div>
+</div>
+</div>
+
+</div>
+
+<div id="import-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+<div style="background:#FFFFFF;border-radius:12px;padding:24px;width:90%;max-width:720px;max-height:85vh;overflow:auto">
+<h3 id="import-title" style="margin:0 0 12px;font-size:17px;font-weight:500">从腾讯文档导入</h3>
+<div id="import-help" style="background:#F8F7F1;padding:10px 14px;border-radius:6px;font-size:12.5px;color:#444441;line-height:1.7;margin-bottom:12px"></div>
+<textarea id="import-textarea" placeholder="把从腾讯文档复制的内容粘贴到这里..." style="width:100%;min-height:240px;font-family:monospace;font-size:12px;border:0.5px solid #D3D1C7;border-radius:6px;padding:8px"></textarea>
+<div id="import-preview" style="margin-top:12px;font-size:12.5px"></div>
+<div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+<button onclick="closeImportDialog()">取消</button>
+<button class="btn-primary" onclick="confirmImport()">确认导入</button>
+</div>
+</div>
+</div>
+
+<script>
+const STORAGE_KEY = "scheduler_v1";
+
+const TIME_SLOTS = ["08:00","09:00","09:30","10:30","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:30"];
+const ARRIVAL_SLOTS = ["早上(8点前)","上午(9-11点)","午休(11-13点)","下午(13-16点)","傍晚(16-18点)","晚上(18点后)","未指定"];
+
+const DEFAULT_CUSTOMERS = ["麦格米特","群电","QMB","迪芬尼","艾迪孚贝","BK01","BK02","TPV","华四","东聚","阿特斯","小象","GLB","万和","美律","FIRST","创客","基龙"];
+const DEFAULT_SUPPLIERS = ["亿丰","特耐王"];
+
+let state = {
+  customers: [...DEFAULT_CUSTOMERS],
+  suppliers: [...DEFAULT_SUPPLIERS],
+  deliveries: [],
+  arrivals: [],
+  reviews: {}
+};
+
+let lastResult = null;
+
+function loadState() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (s) {
+      const parsed = JSON.parse(s);
+      state = { ...state, ...parsed };
+      if (!Array.isArray(state.customers) || state.customers.length === 0) state.customers = [...DEFAULT_CUSTOMERS];
+      if (!Array.isArray(state.suppliers) || state.suppliers.length === 0) state.suppliers = [...DEFAULT_SUPPLIERS];
+      if (!state.reviews || typeof state.reviews !== 'object') state.reviews = {};
+      cleanOldReviews();
+    }
+  } catch(e) {}
+}
+
+function cleanOldReviews() {
+  const now = Date.now();
+  const ninetyDays = 90 * 24 * 60 * 60 * 1000;
+  Object.keys(state.reviews).forEach(date => {
+    if (now - new Date(date).getTime() > ninetyDays) {
+      delete state.reviews[date];
+    }
+  });
+}
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
+}
+
+function renderTags() {
+  const ct = document.getElementById('customer-tags');
+  ct.innerHTML = state.customers.map((c,i) =>
+    `<span class="badge b-blue" style="margin:2px;padding:3px 8px">${escapeHtml(c)} <span style="cursor:pointer;color:#A32D2D;margin-left:4px" onclick="removeCustomer(${i})">×</span></span>`
+  ).join('');
+  const st = document.getElementById('supplier-tags');
+  st.innerHTML = state.suppliers.map((c,i) =>
+    `<span class="badge b-amber" style="margin:2px;padding:3px 8px">${escapeHtml(c)} <span style="cursor:pointer;color:#A32D2D;margin-left:4px" onclick="removeSupplier(${i})">×</span></span>`
+  ).join('');
+}
+
+function addCustomer() {
+  const inp = document.getElementById('new-customer');
+  const v = inp.value.trim();
+  if (v && !state.customers.includes(v)) {
+    state.customers.push(v);
+    inp.value = '';
+    renderTags(); renderDeliveries(); renderArrivals(); saveState();
+  }
+}
+function removeCustomer(i) {
+  state.customers.splice(i,1);
+  renderTags(); renderDeliveries(); renderArrivals(); saveState();
+}
+function addSupplier() {
+  const inp = document.getElementById('new-supplier');
+  const v = inp.value.trim();
+  if (v && !state.suppliers.includes(v)) {
+    state.suppliers.push(v);
+    inp.value = '';
+    renderTags(); renderArrivals(); saveState();
+  }
+}
+function removeSupplier(i) {
+  state.suppliers.splice(i,1);
+  renderTags(); renderArrivals(); saveState();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function addDelivery(d) {
+  state.deliveries.push(d || { customer: state.customers[0]||"", area: "一厂", count: 1, time: "08:00", urgent: false });
+  renderDeliveries(); saveState();
+}
+function removeDelivery(i) { state.deliveries.splice(i,1); renderDeliveries(); saveState(); }
+function updateDelivery(i, field, val) {
+  state.deliveries[i][field] = field==='count' ? Math.max(1, parseInt(val)||1) : (field==='urgent' ? val : val);
+  saveState();
+}
+function renderDeliveries() {
+  const list = document.getElementById('delivery-list');
+  if (state.deliveries.length === 0) {
+    list.innerHTML = '<div class="empty-hint">暂无发货 — 点击右上角"+ 添加"或"加载示例数据"</div>';
+    return;
+  }
+  list.innerHTML = state.deliveries.map((d,i) => `
+    <div class="entry-grid">
+      <select onchange="updateDelivery(${i},'customer',this.value)">
+        ${state.customers.map(c => `<option value="${escapeHtml(c)}" ${c===d.customer?'selected':''}>${escapeHtml(c)}</option>`).join('')}
+      </select>
+      <select onchange="updateDelivery(${i},'area',this.value)">
+        <option ${d.area==='一厂'?'selected':''}>一厂</option>
+        <option ${d.area==='二厂'?'selected':''}>二厂</option>
+      </select>
+      <input type="number" min="1" value="${d.count}" onchange="updateDelivery(${i},'count',this.value)">
+      <select onchange="updateDelivery(${i},'time',this.value)">
+        ${TIME_SLOTS.map(t => `<option ${t===d.time?'selected':''}>${t}</option>`).join('')}
+      </select>
+      <label class="col-extra" style="font-size:12px;display:flex;align-items:center;gap:4px">
+        <input type="checkbox" ${d.urgent?'checked':''} onchange="updateDelivery(${i},'urgent',this.checked)"> 紧急
+      </label>
+      <button onclick="removeDelivery(${i})" style="padding:4px 8px;color:#A32D2D">×</button>
+    </div>
+  `).join('');
+}
+
+function addArrival(a) {
+  state.arrivals.push(a || { supplier: state.suppliers[0]||"", area: "一厂", count: 1, slot: "未指定", forCustomer: "" });
+  renderArrivals(); saveState();
+}
+function removeArrival(i) { state.arrivals.splice(i,1); renderArrivals(); saveState(); }
+function updateArrival(i, field, val) {
+  state.arrivals[i][field] = field==='count' ? Math.max(1, parseInt(val)||1) : val;
+  saveState();
+}
+function renderArrivals() {
+  const list = document.getElementById('arrival-list');
+  if (state.arrivals.length === 0) {
+    list.innerHTML = '<div class="empty-hint">暂无来料 — 点击右上角"+ 添加"或"加载示例数据"</div>';
+    return;
+  }
+  list.innerHTML = state.arrivals.map((a,i) => `
+    <div class="entry-grid">
+      <select onchange="updateArrival(${i},'supplier',this.value)">
+        ${state.suppliers.map(s => `<option value="${escapeHtml(s)}" ${s===a.supplier?'selected':''}>${escapeHtml(s)}</option>`).join('')}
+      </select>
+      <select onchange="updateArrival(${i},'area',this.value)">
+        <option ${a.area==='一厂'?'selected':''}>一厂</option>
+        <option ${a.area==='二厂'?'selected':''}>二厂</option>
+      </select>
+      <input type="number" min="1" value="${a.count}" onchange="updateArrival(${i},'count',this.value)">
+      <select onchange="updateArrival(${i},'slot',this.value)">
+        ${ARRIVAL_SLOTS.map(s => `<option ${s===a.slot?'selected':''}>${s}</option>`).join('')}
+      </select>
+      <input type="text" class="col-extra" placeholder="如 QMB,华四" value="${escapeHtml(a.forCustomer||'')}" onchange="updateArrival(${i},'forCustomer',this.value)">
+      <button onclick="removeArrival(${i})" style="padding:4px 8px;color:#A32D2D">×</button>
+    </div>
+  `).join('');
+}
+
+function clearAll() {
+  if (!confirm('清空所有发货和来料？(名单不变)')) return;
+  state.deliveries = [];
+  state.arrivals = [];
+  renderDeliveries(); renderArrivals(); saveState();
+  document.getElementById('result-empty').style.display = 'block';
+  document.getElementById('result-content').style.display = 'none';
+}
+
+function loadDemo() {
+  state.deliveries = [
+    {customer:"麦格米特",area:"一厂",count:1,time:"08:00",urgent:false},
+    {customer:"群电",area:"一厂",count:1,time:"08:00",urgent:true},
+    {customer:"艾迪孚贝",area:"一厂",count:1,time:"08:00",urgent:false},
+    {customer:"BK01",area:"一厂",count:1,time:"08:00",urgent:false},
+    {customer:"BK02",area:"一厂",count:1,time:"08:00",urgent:false},
+    {customer:"艾迪孚贝",area:"一厂",count:1,time:"09:00",urgent:false},
+    {customer:"艾迪孚贝",area:"一厂",count:1,time:"09:30",urgent:false},
+    {customer:"QMB",area:"一厂",count:1,time:"10:30",urgent:true},
+    {customer:"迪芬尼",area:"一厂",count:1,time:"10:30",urgent:false},
+    {customer:"艾迪孚贝",area:"一厂",count:1,time:"11:00",urgent:false},
+    {customer:"华四",area:"一厂",count:1,time:"11:00",urgent:true},
+    {customer:"TPV",area:"一厂",count:1,time:"13:00",urgent:false},
+    {customer:"艾迪孚贝",area:"一厂",count:1,time:"14:00",urgent:false},
+    {customer:"TPV",area:"一厂",count:1,time:"14:00",urgent:false},
+    {customer:"群电",area:"一厂",count:1,time:"15:00",urgent:false},
+    {customer:"迪芬尼",area:"一厂",count:1,time:"15:00",urgent:false},
+    {customer:"TPV",area:"一厂",count:1,time:"15:00",urgent:false},
+    {customer:"艾迪孚贝",area:"一厂",count:1,time:"16:00",urgent:false},
+    {customer:"TPV",area:"一厂",count:1,time:"16:00",urgent:false},
+    {customer:"麦格米特",area:"一厂",count:2,time:"17:00",urgent:false},
+    {customer:"TPV",area:"一厂",count:1,time:"17:00",urgent:false},
+    {customer:"TPV",area:"一厂",count:1,time:"18:00",urgent:false},
+    {customer:"迪芬尼",area:"一厂",count:1,time:"19:00",urgent:false},
+    {customer:"艾迪孚贝",area:"一厂",count:1,time:"19:00",urgent:false},
+    {customer:"TPV",area:"一厂",count:1,time:"19:00",urgent:false},
+    {customer:"QMB",area:"一厂",count:1,time:"20:30",urgent:false},
+    {customer:"TPV",area:"一厂",count:1,time:"20:30",urgent:false}
+  ];
+  state.arrivals = [
+    {supplier:"亿丰",area:"一厂",count:1,slot:"早上(8点前)",forCustomer:"GLB,小象,QMB,东聚"},
+    {supplier:"亿丰",area:"二厂",count:1,slot:"早上(8点前)",forCustomer:"小象,阿特斯"},
+    {supplier:"亿丰",area:"一厂",count:4,slot:"上午(9-11点)",forCustomer:"QMB,华四,群电,TPV"},
+    {supplier:"亿丰",area:"二厂",count:3,slot:"上午(9-11点)",forCustomer:"万和,阿特斯"},
+    {supplier:"亿丰",area:"一厂",count:1,slot:"傍晚(16-18点)",forCustomer:"麦格米特,迪芬尼,基龙,创客"},
+    {supplier:"特耐王",area:"一厂",count:8,slot:"未指定",forCustomer:"QMB,美律,FIRST"},
+    {supplier:"特耐王",area:"二厂",count:1,slot:"未指定",forCustomer:"万和"}
+  ];
+  renderDeliveries(); renderArrivals(); saveState();
+  generateSchedule();
+}
+
+function generateSchedule() {
+  if (state.deliveries.length === 0 && state.arrivals.length === 0) {
+    alert('请先填写发货或来料信息');
+    return;
+  }
+  const elec = parseInt(document.getElementById('elec-fork').value) || 0;
+  const manual = parseInt(document.getElementById('manual-fork').value) || 0;
+  const loadMin = parseInt(document.getElementById('load-min').value) || 30;
+  const unloadMin = parseInt(document.getElementById('unload-min').value) || 45;
+  const totalForks = elec + manual;
+  if (totalForks === 0) { alert('叉车数量不能为0'); return; }
+
+  const capacityPerHour = totalForks * 60;
+
+  const slotMap = {};
+  TIME_SLOTS.forEach(t => {
+    slotMap[t] = { time: t, deliveries: [], outCount: 0 };
+  });
+
+  state.deliveries.forEach(d => {
+    if (!slotMap[d.time]) slotMap[d.time] = { time: d.time, deliveries: [], outCount: 0 };
+    slotMap[d.time].deliveries.push(d);
+    slotMap[d.time].outCount += d.count;
+  });
+
+  const slotArrivalMap = {
+    "08:00": "早上(8点前)",
+    "09:00": "上午(9-11点)",
+    "09:30": "上午(9-11点)",
+    "10:30": "上午(9-11点)",
+    "11:00": "上午(9-11点)",
+    "12:00": "午休(11-13点)",
+    "13:00": "下午(13-16点)",
+    "14:00": "下午(13-16点)",
+    "15:00": "下午(13-16点)",
+    "16:00": "傍晚(16-18点)",
+    "17:00": "傍晚(16-18点)",
+    "18:00": "晚上(18点后)",
+    "19:00": "晚上(18点后)",
+    "20:30": "晚上(18点后)"
+  };
+
+  const overview = TIME_SLOTS.map(t => {
+    const slot = slotMap[t];
+    const out = slot.outCount;
+    const outDetail = slot.deliveries.map(d => `${d.customer}${d.count>1?d.count+'车':''}${d.urgent?'★':''}`).join(', ');
+    const arrSlot = slotArrivalMap[t];
+    const arrivals = state.arrivals.filter(a => a.slot === arrSlot);
+    const inDetail = arrivals.length === 0 ? '—' :
+      arrivals.map(a => `${a.supplier}${a.area}${a.count}车${a.forCustomer?'('+a.forCustomer+')':''}`).join(', ');
+    const inCount = arrivals.reduce((s,a) => s+a.count, 0);
+
+    const outMin = out * loadMin;
+    const inMin = inCount * unloadMin;
+    const totalMin = outMin + inMin;
+    const cap = capacityPerHour;
+    const util = totalMin / cap;
+
+    let status = 'calm', advice = '';
+    if (util > 1.0) {
+      status = 'peak';
+      const over = totalMin - cap;
+      const moveCount = Math.ceil(over / Math.max(loadMin, unloadMin));
+      advice = `⚠ 超容量${over}分钟，建议错峰${moveCount}车`;
+      if (out >= 4) advice += '，提前7:30前装好待发车';
+      if (inCount >= 3 && out >= 2) advice += '，部分来料推迟到下一空档';
+    } else if (util > 0.85) {
+      status = 'warn';
+      advice = '紧平衡，提前10-15分钟开工，避免任何延误';
+    } else if (out === 0 && inCount === 0) {
+      advice = '空档时段，可调度收货进来';
+    } else {
+      advice = `占用${Math.round(util*100)}%，正常执行`;
+    }
+
+    return {
+      time: t, out, outDetail: outDetail||'—', inCount, inDetail,
+      totalMin, util: Math.round(util*100), status, advice
+    };
+  });
+
+  const matchRows = [];
+  state.arrivals.forEach(a => {
+    const targets = (a.forCustomer || '').split(/[,，;；\s]+/).filter(s=>s);
+    if (targets.length === 0) {
+      matchRows.push({
+        from: `${a.supplier}-${a.area}-${a.count}车`,
+        slot: a.slot,
+        customer: '(未标记客户)',
+        hasDelivery: false,
+        deliveryTime: '—',
+        priority: '中',
+        priorityClass: 'b-amber',
+        note: '建议在备料区堆放，不占发货通道'
+      });
+    } else {
+      targets.forEach(c => {
+        const ds = state.deliveries.filter(d => d.customer === c);
+        if (ds.length === 0) {
+          matchRows.push({
+            from: `${a.supplier}-${a.area}-${a.count}车`,
+            slot: a.slot,
+            customer: c,
+            hasDelivery: false,
+            deliveryTime: '当日无发货',
+            priority: '低',
+            priorityClass: 'b-gray',
+            note: '次日备料，远区堆放'
+          });
+        } else {
+          const times = ds.map(d => d.time + (d.urgent?'★':'')).join(' / ');
+          const hasUrgent = ds.some(d => d.urgent);
+          const earliestTime = ds.map(d=>d.time).sort()[0];
+          const isEarly = earliestTime <= '11:00';
+          let pri = '中', pc = 'b-amber';
+          if (hasUrgent && isEarly) { pri = '★★最高'; pc = 'b-red'; }
+          else if (hasUrgent || isEarly) { pri = '★高'; pc = 'b-amber'; }
+          matchRows.push({
+            from: `${a.supplier}-${a.area}-${a.count}车`,
+            slot: a.slot,
+            customer: c,
+            hasDelivery: true,
+            deliveryTime: times,
+            priority: pri,
+            priorityClass: pc,
+            note: pri.includes('最高') ? '直发线，到货立即卸料备发' : (pri.includes('高') ? '上午前必须卸完' : '常规优先级')
+          });
+        }
+      });
+    }
+  });
+
+  const supplierGroups = {};
+  state.arrivals.forEach(a => {
+    const key = `${a.supplier}|${a.area}`;
+    if (!supplierGroups[key]) supplierGroups[key] = { supplier: a.supplier, area: a.area, total: 0, items: [] };
+    supplierGroups[key].total += a.count;
+    supplierGroups[key].items.push(a);
+  });
+
+  const peakSlotTimes = overview.filter(o => o.status === 'peak').map(o => o.time);
+  const calmSlotTimes = overview.filter(o => o.status === 'calm' && o.out <= 1).map(o => o.time);
+
+  const supplierAdvice = Object.values(supplierGroups).map(g => {
+    let suggested = [];
+    g.items.forEach(item => {
+      if (item.slot === '未指定') {
+        const calmSlots = calmSlotTimes.filter(t => t >= '11:00' && t <= '14:00');
+        suggested.push(`${item.count}车 → 建议 ${calmSlots.length>0 ? calmSlots.slice(0,3).join('/') : '11:30-14:00'}`);
+      } else {
+        suggested.push(`${item.count}车 → ${item.slot}`);
+      }
+    });
+    return {
+      supplier: g.supplier,
+      area: g.area,
+      total: g.total,
+      window: suggested.join(' ; '),
+      note: g.area === '二厂' ? '二厂独立场地，与一厂收发不冲突' :
+            (g.items.some(i=>i.slot==='未指定') ? '★必须提前协商，避开发货高峰：'+(peakSlotTimes.join(',')||'无') : '按既定时段，准时到货')
+    };
+  });
+
+  const risks = [];
+
+  overview.filter(o => o.status === 'peak').forEach(o => {
+    risks.push({
+      risk: `${o.time} 时段超容量`,
+      time: o.time,
+      impact: `发货${o.out}车 + 收货${o.inCount}车 = ${o.totalMin}分钟，超出容量${o.totalMin - capacityPerHour}分钟`,
+      action: o.advice
+    });
+  });
+
+  const unspecifiedSupplier = Object.values(supplierGroups).filter(g => g.items.some(i => i.slot==='未指定'));
+  if (unspecifiedSupplier.length > 0) {
+    unspecifiedSupplier.forEach(g => {
+      risks.push({
+        risk: `${g.supplier}-${g.area} 到货时间未定`,
+        time: '全天',
+        impact: `${g.total}车未指定时段，若集中到货将造成场地崩溃`,
+        action: `★★必须主动通知${g.supplier}：分批到货，避开高峰时段(${peakSlotTimes.join(',')||'无明显高峰'})，建议11:30-14:00集中卸货`
+      });
+    });
+  }
+
+  const earlyUrgent = state.deliveries.filter(d => d.urgent && d.time <= '09:00');
+  earlyUrgent.forEach(d => {
+    const matchedArrivals = state.arrivals.filter(a =>
+      (a.forCustomer||'').includes(d.customer) && a.slot.includes('早上')
+    );
+    if (matchedArrivals.length > 0) {
+      risks.push({
+        risk: `${d.customer} ${d.time}发货 vs 同时段到料`,
+        time: d.time,
+        impact: `如${d.customer}的发货料是当天到料，会出现"还没卸完就要装车"`,
+        action: `确认${d.customer}发的料是用前日库存还是今早到的料；若是今早到的，则发货时间需推迟至到料卸完后`
+      });
+    }
+  });
+
+  const noTargetArrivals = state.arrivals.filter(a => !a.forCustomer);
+  if (noTargetArrivals.length > 0) {
+    risks.push({
+      risk: '部分来料未标记目标客户',
+      time: '—',
+      impact: `${noTargetArrivals.length}批来料未标客户，无法判断卸货优先级`,
+      action: '在"纸板来料"中填写"当日发货"列，标记此批料对应哪些客户的发货需求'
+    });
+  }
+
+  lastResult = { overview, matchRows, supplierAdvice, risks, capacityPerHour, totalForks };
+
+  document.getElementById('result-empty').style.display = 'none';
+  document.getElementById('result-content').style.display = 'block';
+  renderResult();
+}
+
+function renderResult() {
+  const r = lastResult;
+  const totalOut = state.deliveries.reduce((s,d) => s+d.count, 0);
+  const totalIn = state.arrivals.reduce((s,a) => s+a.count, 0);
+  const peakCount = r.overview.filter(o => o.status === 'peak').length;
+  document.getElementById('m-out').textContent = totalOut;
+  document.getElementById('m-in').textContent = totalIn;
+  document.getElementById('m-peak').textContent = peakCount;
+  document.getElementById('m-cap').textContent = r.capacityPerHour;
+  document.getElementById('m-cap-sub').textContent = `分钟 (${r.totalForks}台叉车)`;
+
+  let html1 = `<table><thead><tr>
+    <th style="width:80px">时段</th><th>发货车次</th><th style="width:50px">出车</th>
+    <th>来料</th><th style="width:50px">到车</th>
+    <th style="width:80px">占用率</th><th>状态/建议</th>
+  </tr></thead><tbody>`;
+  r.overview.forEach(o => {
+    html1 += `<tr class="${o.status}">
+      <td><strong>${o.time}</strong></td>
+      <td>${escapeHtml(o.outDetail)}</td>
+      <td>${o.out}</td>
+      <td>${escapeHtml(o.inDetail)}</td>
+      <td>${o.inCount}</td>
+      <td>${o.util}%</td>
+      <td>${escapeHtml(o.advice)}</td>
+    </tr>`;
+  });
+  html1 += '</tbody></table>';
+  document.getElementById('table-overview').innerHTML = html1;
+
+  let html2 = `<table><thead><tr>
+    <th>来料</th><th>到货时段</th><th>对应客户</th><th>客户发货时间</th><th>优先级</th><th>说明</th>
+  </tr></thead><tbody>`;
+  r.matchRows.forEach(m => {
+    html2 += `<tr>
+      <td>${escapeHtml(m.from)}</td>
+      <td>${escapeHtml(m.slot)}</td>
+      <td>${escapeHtml(m.customer)}</td>
+      <td>${escapeHtml(m.deliveryTime)}</td>
+      <td><span class="badge ${m.priorityClass}">${escapeHtml(m.priority)}</span></td>
+      <td>${escapeHtml(m.note)}</td>
+    </tr>`;
+  });
+  html2 += '</tbody></table>';
+  document.getElementById('table-match').innerHTML = html2;
+
+  let html3 = `<table><thead><tr>
+    <th>供应商</th><th>厂区</th><th>总车数</th><th>建议到货窗口</th><th>说明</th>
+  </tr></thead><tbody>`;
+  r.supplierAdvice.forEach(s => {
+    html3 += `<tr>
+      <td><strong>${escapeHtml(s.supplier)}</strong></td>
+      <td>${escapeHtml(s.area)}</td>
+      <td>${s.total}</td>
+      <td>${escapeHtml(s.window)}</td>
+      <td>${escapeHtml(s.note)}</td>
+    </tr>`;
+  });
+  html3 += '</tbody></table>';
+  document.getElementById('table-supplier').innerHTML = html3;
+
+  if (r.risks.length === 0) {
+    document.getElementById('table-risk').innerHTML = '<div class="empty-hint" style="padding:30px">未识别到明显风险，调度方案较平稳</div>';
+  } else {
+    let html4 = `<table><thead><tr>
+      <th style="width:30%">风险点</th><th style="width:80px">时段</th><th style="width:30%">影响</th><th>对策</th>
+    </tr></thead><tbody>`;
+    r.risks.forEach(rk => {
+      html4 += `<tr>
+        <td><strong>${escapeHtml(rk.risk)}</strong></td>
+        <td>${escapeHtml(rk.time)}</td>
+        <td>${escapeHtml(rk.impact)}</td>
+        <td>${escapeHtml(rk.action)}</td>
+      </tr>`;
+    });
+    html4 += '</tbody></table>';
+    document.getElementById('table-risk').innerHTML = html4;
+  }
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'review') renderReviewPanel();
+    if (tab.dataset.tab === 'score') renderScorePanel();
+  });
+});
+
+const I18N = {
+  zh: {
+    sheetNames: { overview: '①调度总览', match: '②收料发货匹配', supplier: '③供应商时段建议', risk: '④风险与对策' },
+    headers: {
+      overview: ['时段','发货车次','出车数','来料明细','到车数','占用率','状态/建议'],
+      match: ['来料','到货时段','对应客户','客户发货时间','优先级','说明'],
+      supplier: ['供应商','厂区','总车数','建议到货窗口','说明'],
+      risk: ['风险点','时段','影响','对策'],
+      reviews: ['日期','计划红灯时段','实际拥堵时段','计划发货','计划收货','插队车数','客户违约','问题供应商','备注'],
+      reviewDetail: ['日期','供应商','厂区','车数','计划时段','实际状态'],
+      scores: ['供应商','累计天数','批次总数','准时','迟到','早到致堵','未到','分数','等级','建议']
+    },
+    fileName: '收发货调度方案',
+    reviewFileName: '复盘记录',
+    scoreFileName: '供应商评分',
+    sheets: { reviews: '复盘汇总', detail: '供应商实到明细', scores: '供应商评分' },
+    slots: {
+      '早上(8点前)': '早上(8点前)',
+      '上午(9-11点)': '上午(9-11点)',
+      '午休(11-13点)': '午休(11-13点)',
+      '下午(13-16点)': '下午(13-16点)',
+      '傍晚(16-18点)': '傍晚(16-18点)',
+      '晚上(18点后)': '晚上(18点后)',
+      '未指定': '未指定'
+    },
+    areas: { '一厂': '一厂', '二厂': '二厂' },
+    statuses: { 'on_time': '准时', 'late': '迟到', 'early': '早到致堵', 'no_show': '未到' },
+    levels: { '优秀': '优秀', '普通': '普通', '重点关注': '重点关注' },
+    priority: { '★★最高': '★★最高', '★高': '★高', '中': '中', '低': '低' },
+    advicePhrases: {
+      '正常执行': '正常执行', '紧平衡': '紧平衡', '空档时段，可调度收货进来': '空档时段，可调度收货进来',
+      '超容量': '超容量', '建议错峰': '建议错峰', '车': '车', '占用': '占用',
+      '提前7:30前装好待发车': '提前7:30前装好待发车', '部分来料推迟到下一空档': '部分来料推迟到下一空档',
+      '提前10-15分钟开工，避免任何延误': '提前10-15分钟开工，避免任何延误',
+      '直发线，到货立即卸料备发': '直发线，到货立即卸料备发',
+      '上午前必须卸完': '上午前必须卸完', '常规优先级': '常规优先级',
+      '建议在备料区堆放，不占发货通道': '建议在备料区堆放，不占发货通道',
+      '次日备料，远区堆放': '次日备料，远区堆放', '当日无发货': '当日无发货',
+      '二厂独立场地，与一厂收发不冲突': '二厂独立场地，与一厂收发不冲突',
+      '按既定时段，准时到货': '按既定时段，准时到货',
+      '保持，可优先排好时段': '保持，可优先排好时段',
+      '建议下次排不便时段或减少配额': '建议下次排不便时段或减少配额',
+      '正常配合': '正常配合'
+    }
+  },
+  th: {
+    sheetNames: { overview: '①ภาพรวมการจัดส่ง', match: '②จับคู่วัตถุดิบ-จัดส่ง', supplier: '③คำแนะนำเวลาซัพพลายเออร์', risk: '④ความเสี่ยงและมาตรการ' },
+    headers: {
+      overview: ['ช่วงเวลา','รายการจัดส่ง','จำนวนคันออก','รายการรับวัตถุดิบ','จำนวนคันเข้า','อัตราการใช้งาน','สถานะ/คำแนะนำ'],
+      match: ['วัตถุดิบเข้า','ช่วงเวลามาถึง','ลูกค้าที่เกี่ยวข้อง','เวลาจัดส่งลูกค้า','ลำดับความสำคัญ','หมายเหตุ'],
+      supplier: ['ซัพพลายเออร์','โรงงาน','จำนวนคันรวม','ช่วงเวลาที่แนะนำ','หมายเหตุ'],
+      risk: ['จุดเสี่ยง','ช่วงเวลา','ผลกระทบ','มาตรการ'],
+      reviews: ['วันที่','ช่วงเวลาแดงตามแผน','ช่วงเวลาแออัดจริง','แผนจัดส่ง','แผนรับวัตถุดิบ','คันแทรก','ลูกค้าผิดนัด','ซัพพลายเออร์ที่มีปัญหา','หมายเหตุ'],
+      reviewDetail: ['วันที่','ซัพพลายเออร์','โรงงาน','จำนวนคัน','ช่วงเวลาตามแผน','สถานะจริง'],
+      scores: ['ซัพพลายเออร์','จำนวนวันสะสม','จำนวนล็อตรวม','ตรงเวลา','สาย','มาก่อนทำให้แออัด','ไม่มา','คะแนน','ระดับ','คำแนะนำ']
+    },
+    fileName: 'แผนการจัดส่ง',
+    reviewFileName: 'บันทึกการทบทวน',
+    scoreFileName: 'คะแนนซัพพลายเออร์',
+    sheets: { reviews: 'สรุปการทบทวน', detail: 'รายละเอียดการมาถึงของซัพพลายเออร์', scores: 'คะแนนซัพพลายเออร์' },
+    slots: {
+      '早上(8点前)': 'เช้า (ก่อน 8:00)',
+      '上午(9-11点)': 'สาย (9-11 น.)',
+      '午休(11-13点)': 'พักเที่ยง (11-13 น.)',
+      '下午(13-16点)': 'บ่าย (13-16 น.)',
+      '傍晚(16-18点)': 'เย็น (16-18 น.)',
+      '晚上(18点后)': 'กลางคืน (หลัง 18 น.)',
+      '未指定': 'ไม่ระบุ'
+    },
+    areas: { '一厂': 'โรงงาน 1', '二厂': 'โรงงาน 2' },
+    statuses: { 'on_time': 'ตรงเวลา', 'late': 'สาย', 'early': 'มาก่อนทำให้แออัด', 'no_show': 'ไม่มา' },
+    levels: { '优秀': 'ดีเยี่ยม', '普通': 'ปกติ', '重点关注': 'ต้องเฝ้าระวัง' },
+    priority: { '★★最高': '★★สูงสุด', '★高': '★สูง', '中': 'กลาง', '低': 'ต่ำ' },
+    advicePhrases: {
+      '正常执行': 'ดำเนินการตามปกติ', '紧平衡': 'สมดุลตึงตัว',
+      '空档时段，可调度收货进来': 'ช่วงเวลาว่าง สามารถจัดรับวัตถุดิบได้',
+      '超容量': 'เกินความจุ', '建议错峰': 'แนะนำเลื่อนเวลา',
+      '车': 'คัน', '占用': 'ใช้งาน',
+      '提前7:30前装好待发车': 'โหลดเสร็จก่อน 7:30 น. รอออก',
+      '部分来料推迟到下一空档': 'เลื่อนวัตถุดิบบางส่วนไปช่วงว่างถัดไป',
+      '提前10-15分钟开工，避免任何延误': 'เริ่มงานล่วงหน้า 10-15 นาที หลีกเลี่ยงความล่าช้า',
+      '直发线，到货立即卸料备发': 'สายจัดส่งตรง ถึงปุ๊บลงปั๊บเตรียมส่ง',
+      '上午前必须卸完': 'ต้องลงให้เสร็จก่อนเที่ยง', '常规优先级': 'ลำดับความสำคัญปกติ',
+      '建议在备料区堆放，不占发货通道': 'แนะนำเก็บในพื้นที่สำรอง ไม่กีดขวางช่องจัดส่ง',
+      '次日备料，远区堆放': 'วัตถุดิบสำหรับวันถัดไป เก็บในพื้นที่ห่าง',
+      '当日无发货': 'ไม่มีการจัดส่งในวันนี้',
+      '二厂独立场地，与一厂收发不冲突': 'โรงงาน 2 มีพื้นที่แยก ไม่ขัดกับโรงงาน 1',
+      '按既定时段，准时到货': 'มาตามเวลาที่กำหนด',
+      '保持，可优先排好时段': 'รักษามาตรฐาน จัดเวลาดีให้ก่อน',
+      '建议下次排不便时段或减少配额': 'ครั้งหน้าจัดเวลาไม่สะดวกหรือลดโควต้า',
+      '正常配合': 'ความร่วมมือปกติ'
+    }
+  },
+  my: {
+    sheetNames: { overview: '①ပို့ဆောင်မှု ခြုံငုံသုံးသပ်ချက်', match: '②ကုန်ကြမ်း-ပို့ဆောင် တွဲဆက်ခြင်း', supplier: '③ပေးသွင်းသူ အချိန်အကြံပြုချက်', risk: '④အန္တရာယ်နှင့် ဖြေရှင်းနည်း' },
+    headers: {
+      overview: ['အချိန်','ပို့ဆောင်စာရင်း','ထွက်ကား','ကုန်ကြမ်းရောက်ရှိမှု','ဝင်ကား','အသုံးပြုနှုန်း','အခြေအနေ/အကြံပြုချက်'],
+      match: ['ဝင်ကုန်ကြမ်း','ရောက်ချိန်','သက်ဆိုင်သော customer','customer ပို့ချိန်','ဦးစားပေးအဆင့်','မှတ်ချက်'],
+      supplier: ['ပေးသွင်းသူ','စက်ရုံ','စုစုပေါင်းကား','အကြံပြုရောက်ချိန်','မှတ်ချက်'],
+      risk: ['အန္တရာယ်','အချိန်','သက်ရောက်မှု','ဖြေရှင်းနည်း'],
+      reviews: ['ရက်စွဲ','အစီအစဉ်အရ အဆိုးချိန်','အမှန်တကယ် ပိတ်ဆို့ချိန်','အစီအစဉ်ပို့','အစီအစဉ်လက်ခံ','မလာရဲ့ဝင်ကား','customer မဖြောင့်','ပြဿနာရှိ ပေးသွင်းသူ','မှတ်ချက်'],
+      reviewDetail: ['ရက်စွဲ','ပေးသွင်းသူ','စက်ရုံ','ကားအရေအတွက်','အစီအစဉ်ချိန်','အမှန်တကယ်အခြေအနေ'],
+      scores: ['ပေးသွင်းသူ','စုစုပေါင်းရက်','စုစုပေါင်းပို့','အချိန်မီ','နောက်ကျ','စောရောက်၍ ပိတ်','မလာ','အမှတ်','အဆင့်','အကြံပြုချက်']
+    },
+    fileName: 'ပို့ဆောင်အစီအစဉ်',
+    reviewFileName: 'ပြန်လည်သုံးသပ်မှတ်တမ်း',
+    scoreFileName: 'ပေးသွင်းသူ အမှတ်',
+    sheets: { reviews: 'သုံးသပ်ချက် အကျဉ်းချုပ်', detail: 'ပေးသွင်းသူ ရောက်ရှိမှုအသေးစိတ်', scores: 'ပေးသွင်းသူ အမှတ်' },
+    slots: {
+      '早上(8点前)': 'မနက် (၈ နာရီ မတိုင်မီ)',
+      '上午(9-11点)': 'မနက်ပိုင်း (၉-၁၁ နာရီ)',
+      '午休(11-13点)': 'နေ့လယ်စာ (၁၁-၁၃ နာရီ)',
+      '下午(13-16点)': 'နေ့လယ် (၁၃-၁၆ နာရီ)',
+      '傍晚(16-18点)': 'ညနေ (၁၆-၁၈ နာရီ)',
+      '晚上(18点后)': 'ညပိုင်း (၁၈ နာရီ နောက်)',
+      '未指定': 'မသတ်မှတ်ထား'
+    },
+    areas: { '一厂': 'စက်ရုံ ၁', '二厂': 'စက်ရုံ ၂' },
+    statuses: { 'on_time': 'အချိန်မီ', 'late': 'နောက်ကျ', 'early': 'စောရောက်၍ ပိတ်', 'no_show': 'မလာ' },
+    levels: { '优秀': 'အလွန်ကောင်း', '普通': 'သာမန်', '重点关注': 'အထူးစောင့်ကြည့်' },
+    priority: { '★★最高': '★★အမြင့်ဆုံး', '★高': '★မြင့်', '中': 'အလယ်အလတ်', '低': 'နိမ့်' },
+    advicePhrases: {
+      '正常执行': 'ပုံမှန်လုပ်ဆောင်ပါ', '紧平衡': 'တင်းကျပ်သော ဟန်ချက်',
+      '空档时段，可调度收货进来': 'အလွတ်အချိန် ကုန်ကြမ်းခေါ်နိုင်',
+      '超容量': 'အသုံးပြုနှုန်း ကျော်လွန်', '建议错峰': 'အချိန်ကွဲ ပြောင်းရန် အကြံပြု',
+      '车': 'ကား', '占用': 'အသုံးပြု',
+      '提前7:30前装好待发车': '၇:၃၀ မတိုင်မီ တင်ဆောင်ပြီးစီးစေ',
+      '部分来料推迟到下一空档': 'ကုန်ကြမ်းအချို့ နောက်အလွတ်ချိန်သို့ ရွှေ့',
+      '提前10-15分钟开工，避免任何延误': '၁၀-၁၅ မိနစ် စောစတင်၍ နှောင့်နှေးမှုရှောင်',
+      '直发线，到货立即卸料备发': 'တိုက်ရိုက်ပို့လမ်း၊ ရောက်ချက်ချင်း ချ၍ ပို့ရန်ပြင်',
+      '上午前必须卸完': 'မွန်းမတည့်မီ ချပြီးစီးရမည်', '常规优先级': 'ပုံမှန် ဦးစားပေးအဆင့်',
+      '建议在备料区堆放，不占发货通道': 'သိုလှောင်ရာ၌ စုပုံ၊ ပို့လမ်းမပိတ်ရန်',
+      '次日备料，远区堆放': 'နောက်ရက်အတွက် ကုန်ကြမ်း၊ အဝေး၌ ထား',
+      '当日无发货': 'ယနေ့ ပို့ဆောင်မှုမရှိ',
+      '二厂独立场地，与一厂收发不冲突': 'စက်ရုံ ၂ သီးခြားနေရာ စက်ရုံ ၁ နှင့်မထိ',
+      '按既定时段，准时到货': 'သတ်မှတ်ချိန်အတိုင်း အချိန်မီရောက်',
+      '保持，可优先排好时段': 'ဆက်ထိန်း၊ အချိန်ကောင်းကို ဦးစားပေးနိုင်',
+      '建议下次排不便时段或减少配额': 'နောင်တွင် မအဆင်ပြေချိန်ပေးမည် သို့မဟုတ် အရေအတွက်လျှော့',
+      '正常配合': 'ပုံမှန် ပူးပေါင်း'
+    }
+  }
+};
+
+function tr(lang, dict, key, fallback) {
+  if (lang === 'zh') return key;
+  return I18N[lang]?.[dict]?.[key] || fallback || key;
+}
+
+function trAdvice(lang, text) {
+  if (lang === 'zh' || !text) return text;
+  let result = text;
+  const phrases = I18N[lang].advicePhrases;
+  // 按长度倒序替换，避免短词覆盖长短语
+  const keys = Object.keys(phrases).sort((a,b) => b.length - a.length);
+  keys.forEach(k => {
+    result = result.split(k).join(phrases[k]);
+  });
+  return result;
+}
+
+function trWindow(lang, text) {
+  if (lang === 'zh' || !text) return text;
+  let result = text;
+  Object.entries(I18N[lang].slots).forEach(([cn, tr]) => {
+    result = result.split(cn).join(tr);
+  });
+  Object.entries(I18N[lang].areas).forEach(([cn, tr]) => {
+    result = result.split(cn).join(tr);
+  });
+  // 替换"建议"和"车"
+  result = result.replace(/建议/g, lang==='th'?'แนะนำ':'အကြံပြု');
+  result = result.replace(/车/g, lang==='th'?' คัน':' ကား');
+  return result;
+}
+
+function buildSheetData(which, lang) {
+  lang = lang || 'zh';
+  const r = lastResult;
+  const t = I18N[lang];
+
+  if (which === 'overview') {
+    return [t.headers.overview]
+      .concat(r.overview.map(o => [
+        o.time,
+        trWindow(lang, o.outDetail),
+        o.out,
+        trWindow(lang, o.inDetail),
+        o.inCount,
+        o.util+'%',
+        trAdvice(lang, o.advice)
+      ]));
+  }
+  if (which === 'match') {
+    return [t.headers.match]
+      .concat(r.matchRows.map(m => [
+        trWindow(lang, m.from),
+        tr(lang, 'slots', m.slot),
+        m.customer,
+        m.deliveryTime,
+        tr(lang, 'priority', m.priority),
+        trAdvice(lang, m.note)
+      ]));
+  }
+  if (which === 'supplier') {
+    return [t.headers.supplier]
+      .concat(r.supplierAdvice.map(s => [
+        s.supplier,
+        tr(lang, 'areas', s.area),
+        s.total,
+        trWindow(lang, s.window),
+        trAdvice(lang, s.note)
+      ]));
+  }
+  if (which === 'risk') {
+    return [t.headers.risk]
+      .concat(r.risks.map(rk => [
+        trAdvice(lang, rk.risk),
+        rk.time,
+        trAdvice(lang, rk.impact),
+        trAdvice(lang, rk.action)
+      ]));
+  }
+}
+
+function getCurrentLang() {
+  const sel = document.getElementById('export-lang');
+  return sel ? sel.value : 'zh';
+}
+
+function exportSheet(which) {
+  if (!lastResult) { alert('请先生成调度方案 / Generate plan first'); return; }
+  const lang = getCurrentLang();
+  const t = I18N[lang];
+  const data = buildSheetData(which, lang);
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, t.sheetNames[which]);
+  const date = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `${date}_${t.sheetNames[which]}_${lang}.xlsx`);
+}
+
+function exportAll() {
+  if (!lastResult) { alert('请先生成调度方案 / Generate plan first'); return; }
+  const lang = getCurrentLang();
+  const t = I18N[lang];
+  const wb = XLSX.utils.book_new();
+  ['overview','match','supplier','risk'].forEach(which => {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(buildSheetData(which, lang)), t.sheetNames[which]);
+  });
+  const date = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `${date}_${t.fileName}_${lang}.xlsx`);
+}
+
+function getTodayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+}
+
+function renderReviewPanel() {
+  const today = getTodayStr();
+  const dateInput = document.getElementById('review-date-input');
+  if (!dateInput.value) dateInput.value = today;
+  document.getElementById('review-date').textContent = dateInput.value;
+
+  const existing = state.reviews[dateInput.value];
+
+  const supplierBatches = state.arrivals.map((a, idx) => ({
+    idx,
+    label: `${a.supplier} - ${a.area} - ${a.count}车 - ${a.slot}${a.forCustomer?' ('+a.forCustomer+')':''}`,
+    supplier: a.supplier,
+    area: a.area,
+    count: a.count,
+    slot: a.slot
+  }));
+
+  const container = document.getElementById('supplier-actuals');
+  if (supplierBatches.length === 0) {
+    container.innerHTML = '<div class="empty-hint">还没有来料计划。请先在左侧填好"纸板来料"，再来这里登记实际情况。</div>';
+  } else {
+    container.innerHTML = supplierBatches.map(b => {
+      const saved = existing?.actuals?.[b.idx] || { status: 'on_time', delay: 0 };
+      return `
+      <div style="border:0.5px solid #E8E6DE;border-radius:6px;padding:8px 10px;margin:4px 0;background:#FAFAF7">
+        <div style="font-size:12.5px;color:#444441;margin-bottom:6px">${escapeHtml(b.label)}</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:12.5px;display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="radio" name="actual-${b.idx}" value="on_time" ${saved.status==='on_time'?'checked':''} onchange="setSupplierActual(${b.idx},'status','on_time')"> 准时
+          </label>
+          <label style="font-size:12.5px;display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="radio" name="actual-${b.idx}" value="late" ${saved.status==='late'?'checked':''} onchange="setSupplierActual(${b.idx},'status','late')"> 迟到
+          </label>
+          <label style="font-size:12.5px;display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="radio" name="actual-${b.idx}" value="early" ${saved.status==='early'?'checked':''} onchange="setSupplierActual(${b.idx},'status','early')"> 早到致拥堵
+          </label>
+          <label style="font-size:12.5px;display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="radio" name="actual-${b.idx}" value="no_show" ${saved.status==='no_show'?'checked':''} onchange="setSupplierActual(${b.idx},'status','no_show')"> 未到
+          </label>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  if (existing) {
+    document.getElementById('rev-extra').value = existing.extra || 0;
+    document.getElementById('rev-cust-late').value = existing.custLate || 0;
+    document.getElementById('rev-actual-peaks').value = existing.actualPeaks || '';
+    document.getElementById('rev-notes').value = existing.notes || '';
+  } else {
+    document.getElementById('rev-extra').value = 0;
+    document.getElementById('rev-cust-late').value = 0;
+    document.getElementById('rev-actual-peaks').value = '';
+    document.getElementById('rev-notes').value = '';
+  }
+
+  if (lastResult) {
+    const peaks = lastResult.overview.filter(o => o.status === 'peak').map(o => o.time);
+    document.getElementById('rev-planned-peaks').textContent = peaks.length>0 ? peaks.join(', ') : '无';
+  } else {
+    document.getElementById('rev-planned-peaks').textContent = '需先生成调度方案';
+  }
+
+  renderReviewHistory();
+}
+
+let pendingActuals = {};
+
+function setSupplierActual(idx, field, val) {
+  if (!pendingActuals[idx]) pendingActuals[idx] = {};
+  pendingActuals[idx][field] = val;
+}
+
+function saveReview() {
+  const date = document.getElementById('review-date-input').value;
+  if (!date) { alert('请选日期'); return; }
+
+  const actuals = {};
+  state.arrivals.forEach((a, idx) => {
+    const radios = document.getElementsByName('actual-'+idx);
+    let status = 'on_time';
+    radios.forEach(r => { if (r.checked) status = r.value; });
+    actuals[idx] = {
+      supplier: a.supplier,
+      area: a.area,
+      count: a.count,
+      slot: a.slot,
+      status
+    };
+  });
+
+  state.reviews[date] = {
+    date,
+    actuals,
+    extra: parseInt(document.getElementById('rev-extra').value) || 0,
+    custLate: parseInt(document.getElementById('rev-cust-late').value) || 0,
+    actualPeaks: document.getElementById('rev-actual-peaks').value,
+    plannedPeaks: lastResult ? lastResult.overview.filter(o=>o.status==='peak').map(o=>o.time).join(', ') : '',
+    notes: document.getElementById('rev-notes').value,
+    plannedOut: state.deliveries.reduce((s,d)=>s+d.count,0),
+    plannedIn: state.arrivals.reduce((s,a)=>s+a.count,0),
+    savedAt: new Date().toISOString()
+  };
+
+  saveState();
+  renderReviewPanel();
+  renderScorePanel();
+  alert('复盘已保存 — '+date);
+}
+
+function deleteReview(date) {
+  if (!confirm('删除 '+date+' 的复盘？')) return;
+  delete state.reviews[date];
+  saveState();
+  renderReviewPanel();
+  renderScorePanel();
+}
+
+function loadReviewToEdit(date) {
+  document.getElementById('review-date-input').value = date;
+  renderReviewPanel();
+  document.querySelector('.tab[data-tab=review]').scrollIntoView({behavior:'smooth'});
+}
+
+function renderReviewHistory() {
+  const dates = Object.keys(state.reviews).sort().reverse();
+  const div = document.getElementById('review-history');
+  if (dates.length === 0) {
+    div.innerHTML = '<div class="empty-hint">还没有历史复盘</div>';
+    return;
+  }
+  div.innerHTML = '<table><thead><tr><th>日期</th><th>计划/实际红灯</th><th>插队车数</th><th>客户违约</th><th>问题供应商</th><th>备注</th><th style="width:120px">操作</th></tr></thead><tbody>' +
+    dates.map(date => {
+      const r = state.reviews[date];
+      const problemSuppliers = Object.values(r.actuals||{})
+        .filter(a => a.status !== 'on_time')
+        .map(a => `${a.supplier}(${a.status==='late'?'迟':a.status==='early'?'早':'未到'})`)
+        .join(', ');
+      return `<tr>
+        <td><strong>${date}</strong></td>
+        <td><span style="color:#5F5E5A">计划</span> ${escapeHtml(r.plannedPeaks||'—')}<br><span style="color:#5F5E5A">实际</span> ${escapeHtml(r.actualPeaks||'—')}</td>
+        <td>${r.extra||0}</td>
+        <td>${r.custLate||0}</td>
+        <td>${escapeHtml(problemSuppliers||'无')}</td>
+        <td style="max-width:200px;font-size:12px">${escapeHtml(r.notes||'')}</td>
+        <td>
+          <button onclick="loadReviewToEdit('${date}')" style="font-size:12px;padding:3px 8px">编辑</button>
+          <button onclick="deleteReview('${date}')" class="btn-danger" style="font-size:12px;padding:3px 8px">删除</button>
+        </td>
+      </tr>`;
+    }).join('') + '</tbody></table>';
+}
+
+function clearAllReviews() {
+  if (!confirm('确定清空所有复盘记录？此操作不可恢复，建议先"导出全部记录"备份。')) return;
+  state.reviews = {};
+  saveState();
+  renderReviewPanel();
+  renderScorePanel();
+}
+
+function calcSupplierScores() {
+  const scores = {};
+  state.suppliers.forEach(s => {
+    scores[s] = {
+      supplier: s,
+      onTime: 0, late: 0, early: 0, noShow: 0,
+      totalBatches: 0, score: 0, days: 0
+    };
+  });
+
+  Object.values(state.reviews).forEach(r => {
+    const supplierSeen = {};
+    Object.values(r.actuals||{}).forEach(a => {
+      if (!scores[a.supplier]) {
+        scores[a.supplier] = { supplier: a.supplier, onTime:0, late:0, early:0, noShow:0, totalBatches:0, score:0, days:0 };
+      }
+      const s = scores[a.supplier];
+      s.totalBatches++;
+      if (a.status === 'on_time') { s.onTime++; s.score += 1; }
+      else if (a.status === 'late') { s.late++; s.score -= 1; }
+      else if (a.status === 'early') { s.early++; s.score -= 2; }
+      else if (a.status === 'no_show') { s.noShow++; s.score -= 2; }
+      supplierSeen[a.supplier] = true;
+    });
+    Object.keys(supplierSeen).forEach(s => { if (scores[s]) scores[s].days++; });
+  });
+
+  return Object.values(scores).filter(s => s.totalBatches > 0).sort((a,b) => b.score - a.score);
+}
+
+function getScoreLevel(score) {
+  if (score >= 5) return { label: '优秀', color: '#27500A', bg: '#EAF3DE', advice: '保持，可优先排好时段' };
+  if (score <= -5) return { label: '重点关注', color: '#791F1F', bg: '#FCEBEB', advice: '建议下次排不便时段或减少配额' };
+  return { label: '普通', color: '#444441', bg: '#F1EFE8', advice: '正常配合' };
+}
+
+function renderScorePanel() {
+  const scores = calcSupplierScores();
+  const cards = document.getElementById('score-cards');
+  if (scores.length === 0) {
+    cards.innerHTML = '<div class="empty-hint" style="grid-column:1/-1">还没有复盘数据 — 在"⑤ 复盘记录"里登记几天后会自动生成评分</div>';
+    document.getElementById('score-table').innerHTML = '';
+    return;
+  }
+  cards.innerHTML = scores.map(s => {
+    const lvl = getScoreLevel(s.score);
+    return `<div class="metric" style="background:${lvl.bg}">
+      <p class="lab" style="color:${lvl.color}">${escapeHtml(s.supplier)}</p>
+      <p class="num" style="color:${lvl.color}">${s.score>0?'+':''}${s.score}</p>
+      <p style="font-size:11.5px;color:${lvl.color};margin:2px 0 0">${lvl.label} · ${s.days}天</p>
+    </div>`;
+  }).join('');
+
+  let html = '<table><thead><tr><th>供应商</th><th>累计天数</th><th>批次总数</th><th>准时</th><th>迟到</th><th>早到致堵</th><th>未到</th><th>分数</th><th>等级</th><th>建议</th></tr></thead><tbody>';
+  scores.forEach(s => {
+    const lvl = getScoreLevel(s.score);
+    html += `<tr>
+      <td><strong>${escapeHtml(s.supplier)}</strong></td>
+      <td>${s.days}</td>
+      <td>${s.totalBatches}</td>
+      <td style="color:#27500A">${s.onTime}</td>
+      <td style="color:#854F0B">${s.late}</td>
+      <td style="color:#A32D2D">${s.early}</td>
+      <td style="color:#A32D2D">${s.noShow}</td>
+      <td style="color:${lvl.color};font-weight:500">${s.score>0?'+':''}${s.score}</td>
+      <td><span class="badge" style="background:${lvl.bg};color:${lvl.color}">${lvl.label}</span></td>
+      <td style="font-size:12px">${lvl.advice}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('score-table').innerHTML = html;
+}
+
+function exportReviews() {
+  const dates = Object.keys(state.reviews).sort();
+  if (dates.length === 0) { alert('还没有复盘数据 / No review data'); return; }
+  const lang = getCurrentLang();
+  const t = I18N[lang];
+
+  const data = [t.headers.reviews];
+  dates.forEach(date => {
+    const r = state.reviews[date];
+    const problems = Object.values(r.actuals||{}).filter(a=>a.status!=='on_time')
+      .map(a=>`${a.supplier}(${tr(lang,'statuses',a.status)})`).join('; ');
+    data.push([date, r.plannedPeaks||'', r.actualPeaks||'', r.plannedOut||0, r.plannedIn||0, r.extra||0, r.custLate||0, problems, r.notes||'']);
+  });
+
+  const detail = [t.headers.reviewDetail];
+  dates.forEach(date => {
+    Object.values(state.reviews[date].actuals||{}).forEach(a => {
+      detail.push([date, a.supplier, tr(lang,'areas',a.area), a.count, tr(lang,'slots',a.slot), tr(lang,'statuses',a.status)]);
+    });
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), t.sheets.reviews);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detail), t.sheets.detail);
+  XLSX.writeFile(wb, `${t.reviewFileName}_${dates[0]}_${dates[dates.length-1]}_${lang}.xlsx`);
+}
+
+function exportScores() {
+  const scores = calcSupplierScores();
+  if (scores.length === 0) { alert('还没有评分数据 / No score data'); return; }
+  const lang = getCurrentLang();
+  const t = I18N[lang];
+
+  const data = [t.headers.scores];
+  scores.forEach(s => {
+    const lvl = getScoreLevel(s.score);
+    data.push([s.supplier, s.days, s.totalBatches, s.onTime, s.late, s.early, s.noShow, s.score, tr(lang,'levels',lvl.label), trAdvice(lang, lvl.advice)]);
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), t.sheets.scores);
+  XLSX.writeFile(wb, `${t.scoreFileName}_${getTodayStr()}_${lang}.xlsx`);
+}
+
+document.addEventListener('change', e => {
+  if (e.target && e.target.id === 'review-date-input') {
+    renderReviewPanel();
+  }
+});
+
+let importTarget = null;
+let importParsed = null;
+
+const TIME_NORMALIZE = {
+  '8:00':'08:00','08:00':'08:00','8时':'08:00',
+  '9:00':'09:00','09:00':'09:00',
+  '9:30':'09:30','09:30':'09:30',
+  '10:30':'10:30','11:00':'11:00','12:00':'12:00',
+  '13:00':'13:00','14:00':'14:00','15:00':'15:00',
+  '16:00':'16:00','17:00':'17:00','18:00':'18:00',
+  '19:00':'19:00','20:30':'20:30'
+};
+
+const SLOT_NORMALIZE = {
+  '早上':'早上(8点前)','早上(8点前)':'早上(8点前)','早上8点前':'早上(8点前)',
+  '上午':'上午(9-11点)','上午(9-11点)':'上午(9-11点)','上午9-11点':'上午(9-11点)',
+  '午休':'午休(11-13点)','午休(11-13点)':'午休(11-13点)',
+  '下午':'下午(13-16点)','下午(13-16点)':'下午(13-16点)',
+  '傍晚':'傍晚(16-18点)','傍晚(16-18点)':'傍晚(16-18点)',
+  '晚上':'晚上(18点后)','晚上(18点后)':'晚上(18点后)',
+  '未指定':'未指定','未定':'未指定','':'未指定'
+};
+
+function showImportDialog(target) {
+  importTarget = target;
+  importParsed = null;
+  const modal = document.getElementById('import-modal');
+  modal.style.display = 'flex';
+  document.getElementById('import-textarea').value = '';
+  document.getElementById('import-preview').innerHTML = '';
+
+  if (target === 'delivery') {
+    document.getElementById('import-title').textContent = '从腾讯文档②发货表导入';
+    document.getElementById('import-help').innerHTML =
+      '<strong>操作步骤：</strong><br>' +
+      '1. 打开腾讯文档②发货表<br>' +
+      '2. 选中数据行（不含表头），按 Ctrl+C 复制<br>' +
+      '3. 粘贴到下方文本框<br>' +
+      '<strong>识别字段顺序：</strong>日期 / 客户 / 厂区 / 车数 / 发货时间 / 紧急 / 备注<br>' +
+      '<span style="color:#A32D2D">日期列会被自动忽略，工具按当前生成方案的当天计算。</span>';
+  } else {
+    document.getElementById('import-title').textContent = '从腾讯文档①来料表导入';
+    document.getElementById('import-help').innerHTML =
+      '<strong>操作步骤：</strong><br>' +
+      '1. 打开腾讯文档①来料表<br>' +
+      '2. 选中数据行（不含表头），按 Ctrl+C 复制<br>' +
+      '3. 粘贴到下方文本框<br>' +
+      '<strong>识别字段顺序：</strong>日期 / 供应商 / 厂区 / 车数 / 到货时段 / 对应客户料 / 紧急 / 备注';
+  }
+
+  setTimeout(() => document.getElementById('import-textarea').focus(), 100);
+
+  document.getElementById('import-textarea').oninput = previewImport;
+}
+
+function closeImportDialog() {
+  document.getElementById('import-modal').style.display = 'none';
+  importTarget = null;
+  importParsed = null;
+}
+
+function previewImport() {
+  const text = document.getElementById('import-textarea').value.trim();
+  if (!text) {
+    document.getElementById('import-preview').innerHTML = '';
+    importParsed = null;
+    return;
+  }
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const rows = lines.map(line => line.split('\t'));
+
+  importParsed = [];
+  let html = `<div style="color:#5F5E5A;margin-bottom:6px">识别到 ${rows.length} 行数据，预览前 5 行：</div>`;
+  html += '<table style="font-size:11.5px"><thead><tr>';
+
+  if (importTarget === 'delivery') {
+    html += '<th>客户</th><th>厂区</th><th>车数</th><th>时间</th><th>紧急</th><th>状态</th>';
+    rows.forEach((r, i) => {
+      let customer = '', area = '一厂', count = 1, time = '08:00', urgent = false, status = '✓';
+      if (r.length >= 5) {
+        customer = (r[1]||'').trim();
+        area = (r[2]||'一厂').trim() || '一厂';
+        count = parseInt(r[3]) || 1;
+        time = TIME_NORMALIZE[(r[4]||'').trim()] || (r[4]||'').trim() || '08:00';
+        urgent = ((r[5]||'').trim() === '是');
+      } else if (r.length >= 4) {
+        customer = (r[0]||'').trim();
+        area = (r[1]||'一厂').trim() || '一厂';
+        count = parseInt(r[2]) || 1;
+        time = TIME_NORMALIZE[(r[3]||'').trim()] || (r[3]||'').trim() || '08:00';
+        urgent = ((r[4]||'').trim() === '是');
+      } else {
+        status = '⚠ 列数不够';
+      }
+      if (!customer) status = '⚠ 客户为空';
+      const item = { customer, area, count, time, urgent };
+      importParsed.push(item);
+      if (i < 5) {
+        html += `<tr><td>${escapeHtml(customer)}</td><td>${escapeHtml(area)}</td><td>${count}</td><td>${escapeHtml(time)}</td><td>${urgent?'是':'否'}</td><td style="color:${status==='✓'?'#27500A':'#A32D2D'}">${status}</td></tr>`;
+      }
+    });
+  } else {
+    html += '<th>供应商</th><th>厂区</th><th>车数</th><th>时段</th><th>对应客户</th><th>状态</th>';
+    rows.forEach((r, i) => {
+      let supplier = '', area = '一厂', count = 1, slot = '未指定', forCustomer = '', status = '✓';
+      if (r.length >= 6) {
+        supplier = (r[1]||'').trim();
+        area = (r[2]||'一厂').trim() || '一厂';
+        count = parseInt(r[3]) || 1;
+        const rawSlot = (r[4]||'').trim();
+        slot = SLOT_NORMALIZE[rawSlot] || rawSlot || '未指定';
+        forCustomer = (r[5]||'').trim();
+      } else if (r.length >= 5) {
+        supplier = (r[0]||'').trim();
+        area = (r[1]||'一厂').trim() || '一厂';
+        count = parseInt(r[2]) || 1;
+        const rawSlot = (r[3]||'').trim();
+        slot = SLOT_NORMALIZE[rawSlot] || rawSlot || '未指定';
+        forCustomer = (r[4]||'').trim();
+      } else {
+        status = '⚠ 列数不够';
+      }
+      if (!supplier) status = '⚠ 供应商为空';
+      const item = { supplier, area, count, slot, forCustomer };
+      importParsed.push(item);
+      if (i < 5) {
+        html += `<tr><td>${escapeHtml(supplier)}</td><td>${escapeHtml(area)}</td><td>${count}</td><td>${escapeHtml(slot)}</td><td>${escapeHtml(forCustomer)}</td><td style="color:${status==='✓'?'#27500A':'#A32D2D'}">${status}</td></tr>`;
+      }
+    });
+  }
+  html += '</tr></thead></table>';
+  document.getElementById('import-preview').innerHTML = html;
+}
+
+function confirmImport() {
+  if (!importParsed || importParsed.length === 0) {
+    alert('没有可导入的数据');
+    return;
+  }
+  const validItems = importParsed.filter(item => {
+    if (importTarget === 'delivery') return item.customer;
+    return item.supplier;
+  });
+  if (validItems.length === 0) {
+    alert('没有有效数据，请检查粘贴内容');
+    return;
+  }
+
+  const confirmMsg = `将导入 ${validItems.length} 条${importTarget==='delivery'?'发货':'来料'}记录\n\n` +
+    '是替换现有数据，还是追加？\n\n' +
+    '点"确定" = 替换（清空原有数据）\n' +
+    '点"取消" = 追加（保留原有数据）';
+  const replace = confirm(confirmMsg);
+
+  if (importTarget === 'delivery') {
+    if (replace) state.deliveries = [];
+    validItems.forEach(item => {
+      if (!state.customers.includes(item.customer)) state.customers.push(item.customer);
+      state.deliveries.push(item);
+    });
+    renderDeliveries();
+  } else {
+    if (replace) state.arrivals = [];
+    validItems.forEach(item => {
+      if (!state.suppliers.includes(item.supplier)) state.suppliers.push(item.supplier);
+      state.arrivals.push(item);
+    });
+    renderArrivals();
+  }
+  renderTags();
+  saveState();
+  closeImportDialog();
+  alert('导入成功！共 '+validItems.length+' 条');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('import-modal').style.display === 'flex') {
+    closeImportDialog();
+  }
+});
+
+loadState();
+renderTags();
+renderDeliveries();
+renderArrivals();
+</script>
+</body>
+</html>
